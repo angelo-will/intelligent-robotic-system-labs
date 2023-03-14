@@ -3,15 +3,8 @@
 MOVE_STEPS = 15
 MAX_VELOCITY = 10
 MEDIUM_VELOCITY = 5
-resetable_counter_steps = 0
 n_steps = 0
 not_avoiding = true
-AVOIDING_STEPS = 15
-LIMIT_ROTATION_STEPS = 15
-PROXIMITY_SENSORS_NUMBER = 24
-rotation_steps = LIMIT_ROTATION_STEPS
-TURN_RIGHT = 1
-TURN_LEFT = 2
 NO_OBSTACLES = -1
 
 QUARTER_STEPS_ROTATION = 21
@@ -23,23 +16,16 @@ QUARTER_SE = 2
 QUARTER_SW = 3
 QUARTER_NW = 4
 
--- turn = 0
-
 --[[ This function is executed every time you press the 'execute'
      button ]]
 function init()
-	-- left_v = robot.random.uniform(0,MAX_VELOCITY)
-	-- right_v = robot.random.uniform(0,MAX_VELOCITY)
 	left_v = MAX_VELOCITY
 	right_v = MAX_VELOCITY
 	robot.wheels.set_velocity(left_v,right_v)
 	n_steps = 0
-	-- turn = 0
-	-- rotation_steps = LIMIT_ROTATION_STEPS
-	-- resetable_counter_steps = 0
 	not_avoiding = true
 	avoiding_steps = 0
-	-- counter_next_move_steps = 0
+	
 end
 
 --[[ This function is executed at each time step
@@ -80,7 +66,7 @@ function step()
 	end
 	
 	if (prox_idx == NO_OBSTACLES) and not_avoiding then
-		log("(prox_idx ~= NO_OBSTACLES) and not_avoiding")
+		log("Obstacles not present and i'm not avoiding")
 		-- Gira verso la luce
 		if ((light_idx >= 1) and (light_idx <= 2)) or ((light_idx >= 23) and (light_idx <= 24)) then
 			log("I'm go forward")
@@ -97,12 +83,13 @@ function step()
 		end
 	elseif (prox_idx == NO_OBSTACLES) then
 		-- mantengo la velocità di prima dato che sto evitando
-		log("prox_idx == NO_OBSTACLES")
+		log("I'm still avoiding")
 		if(avoiding_steps >= 1) then
 			avoiding_steps = avoiding_steps - 1
 		end
-	-- elseif (not_avoiding) then
+		-- elseif (not_avoiding) then
 	else
+		log("Start avoiding")
 		-- in questo caso non stavo evitando ma ora sono presenti ostacoli
 		if (prox_quarter == QUARTER_NW or prox_quarter == QUARTER_NE) then
 			-- ostacolo davanti
@@ -124,19 +111,13 @@ function step()
 			not_avoiding = false
 		else 
 			-- ostacolo dietro
-			not_avoiding = true
+			if(avoiding_steps >= 1) then
+				avoiding_steps = avoiding_steps - 1
+			end
+			-- not_avoiding = true
 			left_v = MAX_VELOCITY
 			right_v = MAX_VELOCITY
-			-- if (light_quarter == QUARTER_SW) or (light_quarter == QUARTER_SE) then
-			-- 	-- luce dietro
-			-- 	avoiding_steps = QUARTER_STEPS_ROTATION
-			-- end
 		end
-	-- else
-	-- 	-- sono presenti ostacoli e sto evitando
-	-- 	if(avoiding_steps >= 1) then
-	-- 		avoiding_steps = avoiding_steps - 1
-	-- 	end
 	end
 
 	if avoiding_steps <= 0 then
@@ -153,27 +134,19 @@ function step()
 	robot.wheels.set_velocity(left_v,right_v)
 end
 
--- function step()
--- end
-
 --[[ This function is executed every time you press the 'reset'
      button in the GUI. It is supposed to restore the state
      of the controller to whatever it was right after init() was
      called. The state of sensors and actuators is reset
      automatically by ARGoS. ]]
 function reset()
-	-- left_v = robot.random.uniform(0,MAX_VELOCITY)
-	-- right_v = robot.random.uniform(0,MAX_VELOCITY)
 	left_v = MAX_VELOCITY
 	right_v = MAX_VELOCITY
 	robot.wheels.set_velocity(left_v,right_v)
 	n_steps = 0
-	-- turn = 0
-	-- rotation_steps = LIMIT_ROTATION_STEPS
-	-- resetable_counter_steps = 0
 	not_avoiding = true
 	avoiding_steps = 0
-	-- counter_next_move_steps = 0
+	
 end
 
 function random_boolean()
