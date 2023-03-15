@@ -6,6 +6,7 @@ MEDIUM_VELOCITY = 5
 n_steps = 0
 not_avoiding = true
 NO_OBSTACLES = -1
+NO_LIGHTS = -1
 
 QUARTER_STEPS_ROTATION = 21
 HALF_ROTATION = 42
@@ -33,23 +34,22 @@ end
 function step()
 	n_steps = n_steps + 1
 
-	light_idx = -1
-	light_max = -1
+	light_idx = NO_LIGHTS
+	light_max = NO_LIGHTS
 	light_quarter = NO_QUARTER
 	for i=1,#robot.light do
-		-- log("robot.light[".. i .. "] = " .. robot.light[i].value)
 		if robot.light[i].value > light_max then
 			light_idx = i
 			light_max = robot.light[i].value
 		end
 	end
-	if (light_idx > -1) then
+	if (light_max > 0) then
 		light_quarter = quarter_by_index(light_idx)
 	end
 
 
-	prox_idx = NO_OBSTACLES -- index of the highest value
-	prox_value = NO_OBSTACLES -- highest value found so far
+	prox_idx = NO_OBSTACLES 
+	prox_value = NO_OBSTACLES 
 	prox_quarter = NO_QUARTER
 	for i=1,#robot.proximity do
 		-- log("robot.proximity[" .. i .. "]=" .. robot.proximity[i].value)
@@ -64,10 +64,13 @@ function step()
 	else
 		prox_idx = NO_OBSTACLES
 	end
-	
-	if (prox_idx == NO_OBSTACLES) and not_avoiding then
+
+	if (light_quarter == NO_QUARTER) and (prox_idx == NO_OBSTACLES) then
+		left_v = robot.random.uniform(0,MAX_VELOCITY)
+		right_v = robot.random.uniform(0,MAX_VELOCITY)
+	elseif (prox_idx == NO_OBSTACLES) and not_avoiding then
 		log("Obstacles not present and i'm not avoiding")
-		-- Gira verso la luce
+		-- turn to light direction
 		if ((light_idx >= 1) and (light_idx <= 2)) or ((light_idx >= 23) and (light_idx <= 24)) then
 			log("I'm go forward")
 			left_v = MAX_VELOCITY
@@ -82,7 +85,7 @@ function step()
 			right_v = MAX_VELOCITY
 		end
 	elseif (prox_idx == NO_OBSTACLES) then
-		-- mantengo la velocità di prima dato che sto evitando
+		-- if i don't meet an obstacle but i'm avoiding a previously one
 		log("I'm still avoiding")
 		if(avoiding_steps >= 1) then
 			avoiding_steps = avoiding_steps - 1
@@ -90,17 +93,17 @@ function step()
 		-- elseif (not_avoiding) then
 	else
 		log("Start avoiding")
-		-- in questo caso non stavo evitando ma ora sono presenti ostacoli
+		-- i start avoiding an obstacle
 		if (prox_quarter == QUARTER_NW or prox_quarter == QUARTER_NE) then
-			-- ostacolo davanti
+			-- obstacle ahead
 			if (light_quarter == QUARTER_NW) or (light_quarter == QUARTER_NE) then
-				-- luce davanti
+				-- light ahead
 				avoiding_steps = QUARTER_STEPS_ROTATION
 			else
-				-- luce dietro
+				-- light behind
 				avoiding_steps = HALF_ROTATION
 			end
-			-- ruoto a dx o sx in maniera casuale
+			-- rotate randomly 
 			if random_boolean then 
 				left_v = MAX_VELOCITY
 				right_v = -MAX_VELOCITY
@@ -110,7 +113,7 @@ function step()
 			end
 			not_avoiding = false
 		else 
-			-- ostacolo dietro
+			-- obstacle behind
 			if(avoiding_steps >= 1) then
 				avoiding_steps = avoiding_steps - 1
 			end
@@ -149,11 +152,13 @@ function reset()
 	
 end
 
+-- [[ Function to get a random boolean ]]
 function random_boolean()
 	math.randomseed(os.time())
 	return (math.random(1,2) % 2) == 0
 end
 
+-- [[ Return quarter-zone of robot based on a sensor with 24 indexes]]
 function quarter_by_index(idx)
 	if (idx >= 1) and (idx <= 6) then
 		return QUARTER_NW
