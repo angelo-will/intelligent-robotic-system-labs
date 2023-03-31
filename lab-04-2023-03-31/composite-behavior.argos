@@ -1,0 +1,171 @@
+<?xml version="1.0" ?>
+ 
+<argos-configuration>
+ 
+  <!-- ************************* -->
+  <!-- * General configuration * -->
+  <!-- ************************* -->
+  <framework>
+    <system threads="0" />
+    <experiment length="0"
+                ticks_per_second="10"
+     />
+<!--    You may want to set the seed of the RNG by: random_seed = "1" (or any n>0) in experiment  -->
+<!-- 		If you don't do this, the RNG is initialised by taking the CPU time -->
+  </framework>
+  
+ 
+  <!-- *************** -->
+  <!-- * Controllers * -->
+  <!-- *************** -->
+  <controllers>
+ 
+    <lua_controller id="lua">
+      <actuators>
+        <differential_steering implementation="default" noise_level="0.0"/>
+	<leds implementation="default" medium="leds" />
+      </actuators>
+      <sensors>
+        <differential_steering implementation="default" noise_level="0.0" />
+        <footbot_proximity implementation="default" show_rays="true" noise_level="0.0" />
+        <footbot_light implementation="rot_z_only" show_rays="true" noise_level="0.0" />
+				<!-- <footbot_motor_ground implementation="rot_z_only" noise_level="0.0" /> -->
+				<positioning implementation="default" noise_level="0.0" />
+      </sensors>
+      <params script="composite-behavior.lua" />
+    </lua_controller>
+ 
+  </controllers>
+ 
+
+  <!-- *********************** -->
+  <!-- * Arena configuration * -->
+  <!-- *********************** -->
+  <arena size="4, 4, 1" center="0,0,0.5" positional_grid_size="8,8,1">
+	<!-- <floor id="f" source="image" path="four_spots.png" /> -->
+    <box id="bn" size="0.1, 4, 0.2" movable="false">
+      <body position="1.9, 0, 0"  orientation="0,0,0" />
+    </box>
+    <box id="bs" size="0.1, 4, 0.2" movable="false">
+      <body position="-1.9,0,0" orientation="0,0,0" />
+    </box>
+    <box id="be" size="4, 0.1, 0.2" movable="false">
+      <body position="0,-1.9,0" orientation="0,0,0" />
+    </box>
+    <box id="bw" size="4, 0.1, 0.2" movable="false">
+      <body position="0,1.9,0" orientation="0,0,0" />
+    </box>
+ 
+    <light id="light"
+           position="0,0,0.5"
+           orientation="0,0,0"
+           color="yellow"
+           intensity="1"
+           medium="leds"/>
+ 
+    <!-- <distribute>
+      <position method="uniform" min="-2,-2,0" max="2,2,0" />
+      <orientation method="uniform" min="0,0,0" max="360,0,0" />
+      <entity quantity="10" max_trials="100">
+        <box id="cube02" size="0.2, 0.2, 0.2" movable="false" />
+      </entity>
+    </distribute> -->
+
+    <distribute>
+      <position method="uniform" min="-2,-2,0" max="2,2,0" />
+      <orientation method="uniform" min="0,0,0" max="360,0,0" />
+      <entity quantity="10" max_trials="100">
+        <box id="wall" size="0.8, 0.15, 0.15" movable="false" />
+      </entity>
+    </distribute>
+
+    <distribute>
+      <position method="uniform" min="-2,-2,0" max="2,2,0" />
+      <orientation method="uniform" min="0,0,0" max="360,0,0" />
+      <entity quantity="10" max_trials="100">
+        <box id="tower" size="0.15, 0.15, 0.8" movable="false" />
+      </entity>
+    </distribute>
+
+    <!-- <box id="wall1" size="4, 0.1, 0.2" movable="false">
+      <body position="1,-1,0" orientation="0,180,0" />
+    </box> -->
+    <!-- <box id="wall2" size="2, 0.1, 0.2" movable="false">
+      <body position="0,0,0" orientation="0,0,0" />
+    </box>
+
+    <box id="wall3" size="2, 0.1, 0.2" movable="false">
+      <body position="0,1,0" orientation="0,0,0" />
+    </box> -->
+
+    
+    
+<!--     Place the robot in a given precise position -->
+<!--    <foot-bot id="fb">
+      <controller config="lua" />
+      <body position="0.2,0.3,0" orientation="0,0,0" />
+    </foot-bot>-->
+
+
+<!--     If you want to place the robot(s) in a random position you may want to use this piece of code -->
+<!-- 	The number of robots can be specificed by changing the field quantity in entity -->
+    <distribute>
+      <position method="uniform" min="-1.9,-1.9,0" max="1.9,1.9,0" />
+      <orientation method="uniform" min="0,0,0" max="360,0,0" />
+      <entity quantity="1" max_trials="100">
+        <foot-bot id="fb">
+          <controller config="lua" />
+        </foot-bot>
+      </entity>
+    </distribute>
+
+
+  </arena>
+ 
+  <!-- ******************* -->
+  <!-- * Physics engines * -->
+  <!-- ******************* -->
+  <physics_engines>
+    <dynamics2d id="dyn2d" />
+  </physics_engines>
+ 
+  <!-- ********* -->
+  <!-- * Media * -->
+  <!-- ********* -->
+  <media>
+    <led id="leds" />
+  </media>
+
+	
+  <!-- ****************** -->
+  <!-- * Visualization * -->
+  <!-- ****************** -->
+  <visualization>
+    <qt-opengl lua_editor="false">
+		<!-- <camera>
+			<placement idx="0" position="-2.0767,0.015,2.74921" look_at="-1.59254,0.015,1.87423" lens_focal_length="20" /> 
+			<placement idx="1" position="1,0,7" look_at="0,0,0" lens_focal_length="40" />
+			<placement idx="2" position="2,3,2" look_at="0,1,0" /> 
+		</camera> -->
+    
+    <camera>
+      <placements>
+      <placement idx = "0" index="0"
+        position="0.101086,0.0372693,8.09403" 
+        look_at="0.0914107,0.0372692,7.09408" up="-0.999953,-1.40275e-05,0.00967523"
+        lens_focal_length="53" />
+      <placement idx= "1" index="1"
+        position="7.09546,0.00769617,2.76748"
+        look_at="6.15031,0.00623537,2.44083" up="-0.326648,-0.000504861,0.945146"
+        lens_focal_length="53.8" />
+       <placement idx ="2" index="2"
+        position="-0.0163479,6.57323,2.94796"
+        look_at="-0.0264946,5.66632,2.52675" up="-0.00471227,-0.42118,0.906965"
+        lens_focal_length="53.75" />
+      </placements>
+    </camera>
+
+    </qt-opengl>
+  </visualization>
+ 
+</argos-configuration>
