@@ -3,48 +3,136 @@
 LOW_VELOCITY = 5
 MEDIUM_VELOCITY = 10
 MAX_VELOCITY = 15
-QUANTUM_STEPS = 25
+QUANTUM_STEPS = 15
 local n_steps = 0
 
-FRONTAL_LIGHT_SENSORS = {1,2,23,24}
-ALL_FRONTAL_SENSORS = {1,2,3,4,5,6,24,23,22,21,20,19,18}
-LEFT_SENSORS = {1,2,3,4,5,6,7,8,9,10,11,12}
-RIGHT_SENSORS = {13,14,15,16,17,17,18,19,20,21,22,23,24}
+LIGHT_THRESHOLD = 0.31
+MINIMUM_DISTANCE_OBSTACLES = 0.2
 
-LIGHT_THRESHOLD = 0.3
-MINIMUM_DISTANCE_OBSTACLES = 0.3
+DEBUG = true
 
+local vl = require "vector"
+local v_tstr = vl.tostring
+
+local ts = tostring
+
+local light_found
 local light_reached
+local light_variation
+local obs_detected
 
--- Counter used to avoid that robot will be stucked
-local avoiding_counter = require("counter")
+local wd_pol_vec
+
+local velocity
+
+-- Function to set initial parameters of simulation
+function initialize_simulation()
+	light_found = false
+	light_reached = false
+	obs_detected = false
+	n_steps = 0
+	light_variation = 0
+	wd_pol_vec = vl.build_polar(get_random_velocity_and_angle())
+	velocity = wd_pol_vec
+	robot.wheels.set_velocity(get_speed_from_velocity(velocity))
+end
 
 --This function is executed every time you press the 'execute' 
 function init()
-	avoiding_counter:reset(0,QUANTUM_STEPS)
-	light_reached = false
-	n_steps = 0
-	left_v = robot.random.uniform(0,MAX_VELOCITY)
-	right_v = robot.random.uniform(0,MAX_VELOCITY)
-	robot.wheels.set_velocity(left_v,right_v)
+	initialize_simulation()
+end
+
+function reset()
+	initialize_simulation()
 end
 
 function step()
-	
 	n_steps = n_steps + 1
-	if counter_not_exist_or_is_end(avoiding_counter) and not light_reached then
-		left_v,right_v = wander_behaviour(robot,MAX_VELOCITY,false,n_steps,left_v,right_v)
-	end
-	if counter_not_exist_or_is_end(avoiding_counter) and not light_reached then 
-		light_reached,left_v,right_v = phototaxis_behaviour(robot,left_v,right_v)
-	end
-	if not light_reached then left_v,right_v =
-		 obstacle_avoidance_behaviour(robot,left_v,right_v,avoiding_counter)
-	end
-	log("left_v: " .. tostring(left_v))
-	log("right_v: " .. tostring(right_v))
+	local pt_pol_vec = vl.polar_zero()
+	local oa_pol_vec = vl.polar_zero()
+	velocity = vl.polar_zero()
+
+	oa_pol_vec = (not light_reached) and obstacle_avoidance_behaviour() or vl.polar_zero()
+	pt_pol_vec = phototaxis_behaviour()
+	wd_pol_vec = not light_reached and wander_behaviour(wd_pol_vec) or vl.polar_zero()
+
+	debug_log("PT-velocity="..v_tstr(pt_pol_vec))
+	debug_log("OA-velocity="..v_tstr(oa_pol_vec))
+	debug_log("WD-velocity="..v_tstr(wd_pol_vec))
+
+	oa_pol_vec = vl.polar_scale(oa_pol_vec,10)
+	pt_pol_vec = vl.polar_scale(pt_pol_vec,obs_detected and MEDIUM_VELOCITY or MAX_VELOCITY)
+	wd_pol_vec = vl.polar_scale(wd_pol_vec, (obs_detected or light_found) and 0.1 or 1)
+
+	debug_log("PT-velocity-after-scale="..v_tstr(pt_pol_vec))
+	debug_log("OA-velocity-after-scale="..v_tstr(oa_pol_vec))
+	debug_log("WD-velocity-after-scale="..v_tstr(wd_pol_vec))
+
+	velocity = vl.vec2_polar_sum(velocity,pt_pol_vec)
+	debug_log("vel+pt="..v_tstr(velocity))
+
+	velocity = vl.vec2_polar_sum(velocity,oa_pol_vec)
+	debug_log("vel+oa="..v_tstr(velocity))
+
+	velocity = vl.vec2_polar_sum(velocity,wd_pol_vec)
+	debug_log("vel+wd="..v_tstr(velocity))
+
+
+	local left_v,right_v = get_speed_from_velocity(velocity)
+
+	-- if light_found and not obs_detected then
+	-- 	left_v,right_v = normalize_speeds_to_max(left_v,right_v)
+	-- end
+
+	debug_log("speeds: left_v="..left_v..",right_v="..right_v)
+
+	left_v,right_v = normalize_speeds_to_medium(left_v,right_v)
+
+	debug_log("speeds normalized: left_v="..left_v..",right_v="..right_v)
+
 	robot.wheels.set_velocity(left_v,right_v)
 
+end
+
+-- Normalize two speed passed if one of them is over the limit passed,
+-- in that case return highest speed equal to limit and other proportional
+-- to it.
+function normalize_speeds_to(left_v,right_v,speeds_limit) 
+	if left_v >speeds_limit or right_v > speeds_limit then
+		if left_v > right_v then
+			right_v = (speeds_limit*right_v)/left_v
+			left_v = speeds_limit
+		else
+			left_v = (speeds_limit*left_v)/right_v
+			right_v = speeds_limit
+		end
+	end
+	return left_v,right_v
+end
+
+-- Normalize two speed proportional to MAX_VELOCITY
+function normalize_speeds_to_max(left_v,right_v)
+	return normalize_speeds_to(left_v,right_v,MAX_VELOCITY)
+end
+
+-- Normalize two speed proportional to MEDIUM_VELOCITY
+function normalize_speeds_to_medium(left_v,right_v)
+	return normalize_speeds_to(left_v,right_v,MEDIUM_VELOCITY)
+end
+
+-- Normalize two speed proportional to LOW_VELOCITY
+function normalize_speeds_to_low(left_v,right_v)
+	return normalize_speeds_to(left_v,right_v,LOW_VELOCITY)
+end
+
+-- Calculate left and right speed wheels of robot based on velocity passed.
+-- Velocity has to have length and angle parameters
+function get_speed_from_velocity(velocity)
+	local wheels_distance = robot.wheels.axis_length
+	local left_v = velocity.length - (velocity.angle*wheels_distance)/2
+	local right_v = velocity.length + (velocity.angle*wheels_distance)/2
+
+	return left_v,right_v
 end
 
 -- This function is executed every time you press the 'reset'
@@ -52,155 +140,89 @@ end
 -- of the controller to whatever it was right after init() was
 -- called. The state of sensors and actuators is reset
 -- automatically by ARGoS.
-function reset()
-	avoiding_counter:reset()
-	light_reached = false
-	n_steps = 0
-	left_v = robot.random.uniform(0,MAX_VELOCITY)
-	right_v = robot.random.uniform(0,MAX_VELOCITY)
-	robot.wheels.set_velocity(left_v,right_v)
-end
 
 -- This function is executed only once, when the robot is removed
 -- from the simulation
 function destroy()
 end
 
--- Behaviour of a robot that try to avoid obstacle.
--- Return speed of wheels to avoid but if no object is detected return same speeds passed.
--- Counter is used to get far away from an object before do other actions.
-function obstacle_avoidance_behaviour(robot,default_left_v,default_right_v,counter)
-	local obs_idx, obs_max = detect_max_sensor_value(robot.proximity)
+-- Perform obstacle avoidance behaviour returning a polar vector
+-- indicating movement of robot reverse to obstacles perceived.
+function obstacle_avoidance_behaviour()
+	
+	local max,obs_vec_sum = sensors_values_as_vector(robot.proximity)
+	obs_detected = max > MINIMUM_DISTANCE_OBSTACLES
 
-	log("OA - obs_idx = " .. tostring(obs_idx))
-	log("OA - obs_max = " .. tostring(obs_max))
-	if obs_idx and contains(ALL_FRONTAL_SENSORS,obs_idx) 
-		and obs_max >= MINIMUM_DISTANCE_OBSTACLES then
-		-- object is in front
-		log("OA - See an object")
-		counter:reset(counter:get_initial(),robot.random.uniform(2,QUANTUM_STEPS))
-		counter:tick()
-		log("OA - counter:get_count() = " .. counter:get_count())
-		if random_boolean() then 
-			return turn_right(MEDIUM_VELOCITY)
-		else
-			return turn_right(MEDIUM_VELOCITY)
-		end
-	elseif not counter:is_init() then
-		-- i have already been avoiding
-		counter:tick()
-		if counter:is_end() then counter:reset() end
-		return go_forward(MEDIUM_VELOCITY)
+	-- debug_log("OA-obs_detected="..ts(obs_detected))
+	debug_log("OA-max="..ts(max))
+	debug_log("OA-Vector polar sum: " .. v_tstr(obs_vec_sum))
+	local opposite_vector = vl.polar_opposite(obs_vec_sum)
+	-- debug_log("OA-Vector opposite: " .. v_tstr(opposite_vector))
+	return opposite_vector
+end
+
+-- Perform phototaxis behaviour returning a polar vector
+-- indicating movement of robot toward the light. The vector is equal to zero if 
+-- light is reache or if no light is found.
+function phototaxis_behaviour()
+	
+	local max,light_vec_sum = sensors_values_as_vector(robot.light)
+	light_found = max > 0
+	light_reached = max > LIGHT_THRESHOLD
+
+	-- debug_log("PT-max="..max)
+	-- debug_log("new_max-old_max="..ts(max-light_variation))
+	-- debug_log("PT-light_found="..ts(light_found))
+	-- debug_log("PT-Vector polar sum: " .. v_tstr(light_vec_sum))
+	light_variation = max
+	return light_reached and vl.polar_zero() or light_vec_sum
+end
+
+-- Perform a wander behaviour returning a polar vector toward random direction.
+-- If QUANTUM_STEPS of simulation are not passed, return velocity vector passed.
+function wander_behaviour(velocity)
+	if n_steps_are_passed(n_steps, QUANTUM_STEPS) then
+		return vl.build_polar(get_random_velocity_and_angle())
 	else
-		-- no object detected
-		return default_left_v,default_right_v
+		return velocity
 	end
 end
 
--- Behaviour of a robot that try follow a light.
--- If light is not detected speeds returned are which are passed.
--- First boolean is false if light is not reached, true otherwise.
-function phototaxis_behaviour(robot,default_left_v,default_right_v)
-	local light_idx, light_max = detect_max_sensor_value(robot.light)
-	log("PT - sensorLight[" .. tostring(light_idx) .. "]" .. light_max)
-	if light_max < LIGHT_THRESHOLD then
-		if light_idx and (not contains(FRONTAL_LIGHT_SENSORS,light_idx)) then 
-			-- light detected but is not positioned in front
-			log("PT- See light")
-			if contains(LEFT_SENSORS,light_idx) then
-				return false,turn_left(MEDIUM_VELOCITY)
-			else
-				return false,turn_right(MEDIUM_VELOCITY)
-			end
-		elseif not light_idx then
-			-- no light detected
-			log("PT- No light detected")
-			return false,default_left_v,default_right_v
-		else
-			-- light in front
-			return false,go_forward(MAX_VELOCITY)
-		end
-	else
-		-- light reached
-		return true, stop()
+-- Return max of values perceived by sensors and a sum of values as polar vector
+-- based on position of each sensors.
+function sensors_values_as_vector(sensors)
+	local max = 0
+	local vectors_sum = vl.polar_zero()
+	for i=1,#sensors do
+		local vector_polar =
+		{
+			length = sensors[i].value,
+			angle = sensors[i].angle
+		}
+		vectors_sum = vl.vec2_polar_sum(vectors_sum,vector_polar)
+		max = sensors[i].value > max and sensors[i].value or max
 	end
+	return max,vectors_sum
 end
 
--- Return two random speed between 0 and limit (included) after total steps.
--- If steps are not passed return defaults speed passed
--- If single_wheel is true only one speed is returned.
-function wander_behaviour(robot,limit,single_wheel,steps,default_left_v,default_right_v)
-	if n_steps_are_passed(steps, QUANTUM_STEPS) then
-		log("Do wander")
-		if single_wheel then
-			return robot.random.uniform(0,limit)
-		else
-			return robot.random.uniform(0,limit),robot.random.uniform(0,limit)
-		end
-	else
-		return default_left_v,default_right_v
-	end
+-- Return speed and angle randomly
+function get_random_velocity_and_angle()
+	local speed = robot.random.uniform(MEDIUM_VELOCITY,MAX_VELOCITY)
+	local angle = get_radians_robot_angle(robot.random.uniform(0,180)-90)
+	return speed,angle
 end
 
+function get_radians_robot_angle(angle_degrees)
+	return angle_degrees < 180 and math.rad(angle_degrees) or math.rad(angle_degrees-360)
+end
 -- Return true if quantum_steps are passed in steps, false otherwise
 function n_steps_are_passed(steps,quantum_steps)
 	return steps % quantum_steps == 0
 end
 
--- Return true if counter not exist or is ended, false otherwise
-function counter_not_exist_or_is_end(counter)
-	return not counter or counter:is_init()
-end
-
--- Passed a sensors array return index of them with highest value and the value.
--- nil,0 otherwise
-function detect_max_sensor_value(sensors)
-	local idx = nil
-	local max = 0
-	for i=1,#sensors do
-		if sensors[i].value > max then
-			idx = i
-			max = sensors[i].value
-		end
+function debug_log(string)
+	if DEBUG then
+		log(string)
 	end
-	return idx,max
-
-end
-
--- Return true if table contains element, false otherwise
-function contains(table, element)
-	for _,value in ipairs(table)
-	do
-		if value == element then
-			return true
-		end
-	end
-	return false
-end
-
--- Return two speed to turn left a footbot 
-function turn_left(speed)
-	return -speed,speed	
-end
-
--- Return two speed to turn right a footbot 
-function turn_right(speed)
-	return speed,-speed	
-end
-
--- Return two speed equal to passed speed
-function go_forward(speed)
-	return speed,speed
-end
-
--- Return two stop speed
-function stop()
-	return 0,0
-end
-
--- Function to get a random boolean 
-function random_boolean()
-	math.randomseed(os.time())
-	return (math.random(1, 2) % 2) == 0
 end
 
